@@ -286,7 +286,7 @@ Limpar todos os reminders:
 omarchy reminder clear
 ```
 
-Validar o plugin:
+Validar o plugin
 
 ```bash
 omarchy plugin validate ~/.config/omarchy/plugins/mat.reminder-countdown
