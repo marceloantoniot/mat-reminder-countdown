@@ -1,0 +1,528 @@
+Log da sessao - Reminder Countdown para Omarchy
+Arquivo: log_session_13092026_1527.txt
+Data/hora de salvamento: 13/09/2026 15:27
+Local: /home/mat/.config/omarchy/plugins/mat.reminder-countdown/
+
+Resumo
+======
+
+Nesta sessao foi planejado, implementado e documentado um plugin local do
+Omarchy Shell chamado `mat.reminder-countdown`.
+
+O objetivo foi adicionar uma contagem regressiva na top bar para o proximo
+`omarchy reminder`, com suporte a multiplos reminders e um sinalizador piscante
+quando algum reminder vence. O sinalizador permanece visivel ate o usuario
+clicar nele, enquanto o countdown do proximo reminder continua normalmente.
+
+Contexto inicial
+================
+
+O pedido inicial foi:
+
+- Existe o recurso `reminder` no Omarchy.
+- O usuario queria mostrar na top bar o tempo restante ate o proximo reminder.
+- Exemplo: criar um reminder para "tomar cafe" em 5 minutos e ver uma contagem
+  regressiva na barra.
+- Se houver mais de um reminder, a barra deve sempre mostrar o mais proximo.
+- Quando o reminder mais proximo vencer, a contagem deve passar para o proximo.
+- Alem da notificacao ja existente, deveria aparecer um sinalizador piscando
+  indicando que um timer chegou.
+- Esse sinalizador deveria sumir apenas quando o usuario clicasse nele.
+- A solucao deveria ser portavel.
+
+Exploracao do ambiente
+======================
+
+Foi usada a skill `omarchy`, porque a tarefa envolve configuracao de usuario do
+Omarchy, shell, top bar, plugins e reminders.
+
+Arquivos e comandos inspecionados:
+
+- `/home/mat/.codex/skills/omarchy/SKILL.md`
+- `/home/mat/.codex/skills/omarchy/plugins.md`
+- `/usr/share/omarchy/bin/omarchy-reminder`
+- `/usr/share/omarchy/shell/plugins/bar/indicators/Reminder.qml`
+- `/usr/share/omarchy/shell/plugins/reminders/ReminderFlow.qml`
+- `/usr/share/omarchy/shell/plugins/reminders/ReminderFlowModel.js`
+- `/usr/share/omarchy/shell/plugins/README.md`
+- `/usr/share/omarchy/shell/plugins/bar/README.md`
+- `/usr/share/omarchy/shell/Ui/BarWidget.qml`
+- `/usr/share/omarchy/shell/Ui/WidgetButton.qml`
+- `/usr/share/omarchy/shell/Ui/BarIconButton.qml`
+- `/home/mat/.config/omarchy/shell.json`
+
+Comandos relevantes executados durante a exploracao:
+
+- `omarchy reminder --help`
+- `omarchy reminder show --json`
+- `omarchy plugin --help`
+- `omarchy plugin list`
+
+Descobertas importantes
+=======================
+
+1. O comando `omarchy reminder show --json` ja existe.
+
+   Ele retorna uma estrutura com:
+
+   - `count`
+   - `active`
+   - `tooltip`
+   - `reminders[]`
+
+   Cada reminder inclui informacoes como:
+
+   - `unit`
+   - `timer`
+   - `label`
+   - `message`
+   - `remaining`
+   - `remainingSeconds`
+   - `at`
+   - `atTime`
+
+2. O indicador nativo do Omarchy para reminders existe em:
+
+   `/usr/share/omarchy/shell/plugins/bar/indicators/Reminder.qml`
+
+   Ele mostra apenas um icone/estado, consulta `omarchy-reminder show --json` e
+   abre a lista de reminders ao clicar.
+
+3. A barra aceita widgets customizados de usuario como plugins em:
+
+   `~/.config/omarchy/plugins/<plugin-id>/`
+
+4. A configuracao da barra fica em:
+
+   `~/.config/omarchy/shell.json`
+
+5. A abordagem portavel mais segura seria criar um plugin local em
+   `~/.config/omarchy/plugins/`, sem editar arquivos em `/usr/share/omarchy/`.
+
+Planejamento
+============
+
+Foi discutida a melhor abordagem para implementar o comportamento.
+
+Opcoes consideradas:
+
+1. Plugin local de usuario.
+
+   Vantagens:
+
+   - Portavel.
+   - Seguro contra updates do Omarchy.
+   - Nao altera `/usr/share/omarchy`.
+   - Usa APIs publicas existentes.
+
+2. Modificar o Omarchy upstream.
+
+   Vantagens:
+
+   - Integracao mais profunda.
+
+   Desvantagens:
+
+   - Menos portavel para uso local.
+   - Poderia exigir manutencao do pacote ou PR upstream.
+
+3. Modulo simples `type: command`.
+
+   Vantagens:
+
+   - Mais simples.
+
+   Desvantagens:
+
+   - Limitado para estado piscante, clique e logica rica.
+
+Foi escolhida a abordagem "plugin local".
+
+Plano aprovado
+==============
+
+O plano foi criar um plugin `mat.reminder-countdown` com:
+
+- `manifest.json`
+- `BarWidget.qml`
+
+Comportamento planejado:
+
+- Consultar `omarchy-reminder show --json` periodicamente.
+- Escolher o reminder com menor `remainingSeconds`.
+- Mostrar o countdown na top bar.
+- Quando um reminder vencer, mostrar `!` piscando.
+- Se houver outro reminder ativo, continuar mostrando o countdown do proximo.
+- Clicar no widget limpa apenas o sinalizador visual.
+- Se nao houver sinalizador, clicar mostra reminders ativos ou abre o fluxo de
+  criacao.
+
+Implementacao inicial
+=====================
+
+Foi criado o plugin em:
+
+`/home/mat/.config/omarchy/plugins/mat.reminder-countdown/`
+
+Arquivos criados:
+
+- `manifest.json`
+- `BarWidget.qml`
+
+Tambem foi atualizado:
+
+- `/home/mat/.config/omarchy/shell.json`
+
+para habilitar e posicionar o widget.
+
+O plugin foi inicialmente posicionado antes do relogio no centro da barra.
+Depois, o usuario perguntou se poderia ficar a esquerda ou direita, e foi
+explicado que sim, usando:
+
+`omarchy bar move mat.reminder-countdown --section left`
+
+ou:
+
+`omarchy bar move mat.reminder-countdown --section right`
+
+Estado atual observado posteriormente:
+
+No `shell.json`, o plugin ficou em `bar.layout.left`, junto de:
+
+- `omarchy.menu`
+- `omarchy.workspaces`
+- `mat.reminder-countdown`
+
+Configuracoes atuais do widget:
+
+```json
+{
+  "id": "mat.reminder-countdown",
+  "showLabel": false,
+  "hideWhenEmpty": true
+}
+```
+
+Detalhes do manifest
+====================
+
+O `manifest.json` declara:
+
+- `schemaVersion`: 1
+- `id`: `mat.reminder-countdown`
+- `name`: `Reminder Countdown`
+- `version`: `1.0.0`
+- `author`: `mat`
+- `kinds`: `["bar-widget"]`
+- entry point de bar widget: `BarWidget.qml`
+
+Defaults:
+
+- `showLabel`: `false`
+- `hideWhenEmpty`: `true`
+
+Primeira logica implementada
+============================
+
+O `BarWidget.qml` foi criado usando:
+
+- `BarWidget` como root.
+- `WidgetButton` como UI principal.
+- `Process` para executar `omarchy-reminder show --json`.
+- `Timer` de 1 segundo para atualizar o estado.
+- `Timer` de 500 ms para piscar o alerta.
+
+Estados principais:
+
+- `reminders`
+- `nextReminder`
+- `remainingSeconds`
+- `expiredPending`
+- `lastSeenUnit`
+- `lastSeenAt`
+- `lastSeenLabel`
+- `blinkOn`
+
+Funcoes principais:
+
+- `formatDuration(seconds)`
+- `pad2(value)`
+- `reminderKey(item)`
+- `findNext(items)`
+- `containsReminder(items, key)`
+- `updateFromData(data)`
+- `update(raw)`
+- `refresh()`
+
+Foi validado com:
+
+`omarchy plugin validate /home/mat/.config/omarchy/plugins/mat.reminder-countdown`
+
+Resultado: validacao sem erros.
+
+Limite encontrado
+=================
+
+Quando o usuario testou com multiplos timers, encontrou um cenario especifico:
+
+- Reminder 1: "escovar os dentes" em 1 minuto.
+- Reminder 2: "tomar banho" em 3 minutos.
+
+Comportamento correto ja existente:
+
+- Quando o primeiro vence, o timer do proximo inicia corretamente.
+
+Comportamento desejado adicional:
+
+- Mesmo iniciando o proximo timer, o sinalizador piscante deve continuar ate o
+  usuario clicar.
+
+A primeira implementacao usava apenas `lastSeenUnit`, ou seja, lembrava de um
+unico reminder visto anteriormente. Isso era fragil para multiplos timers,
+porque a logica podia ser sobrescrita pelo proximo reminder ativo.
+
+Correcao multi-timer
+====================
+
+Foi criado um plano para separar o estado do countdown atual do estado de alerta
+pendente.
+
+Mudanca implementada:
+
+- Remover a dependencia de um unico `lastSeenUnit`.
+- Adicionar `seenReminders`, um snapshot dos reminders vistos no ciclo anterior.
+- Adicionar `expiredLabel` para guardar o texto do reminder vencido.
+- Comparar `seenReminders` com a lista atual retornada pelo JSON.
+- Se um reminder anteriormente visto desaparecer depois do seu `at`, marcar:
+
+```qml
+expiredPending = true
+expiredLabel = previous.label
+```
+
+Com isso:
+
+- `nextReminder` continua apontando para o proximo reminder ativo.
+- `expiredPending` continua verdadeiro ate o clique.
+- A UI pode mostrar `󰢌 ! 1:59`.
+
+Funcoes adicionadas ou alteradas:
+
+- `snapshotReminders(items)`
+- `markExpiredFromMissing(items)`
+- `updateFromData(data)`
+
+Resultado esperado:
+
+- Antes do primeiro vencer: `󰢌 0:59`
+- Depois que o primeiro vence, com o segundo ativo: `󰢌 ! 1:59`
+- Ao clicar: o `!` desaparece, mas o countdown continua.
+
+Foi criado backup antes da alteracao:
+
+`/home/mat/.config/omarchy/plugins/mat.reminder-countdown/BarWidget.qml.bak.multi-timer-alert-1789323309`
+
+Validacao:
+
+`omarchy plugin validate /home/mat/.config/omarchy/plugins/mat.reminder-countdown`
+
+Resultado: validacao sem erros.
+
+Observacao:
+
+Em alguns momentos, `omarchy-shell shell rescanPlugins` retornou:
+
+`omarchy-shell is not running`
+
+Ou seja, a validacao do plugin passou, mas o hot reload nao pode ser acionado
+na sessao nao grafica em que os comandos foram executados. A recomendacao foi
+usar `omarchy restart shell` na sessao grafica, se necessario.
+
+README.md
+=========
+
+Depois que o plugin foi considerado adequado pelo usuario, foi solicitado criar
+um `README.md` na pasta do plugin.
+
+Arquivo criado:
+
+`/home/mat/.config/omarchy/plugins/mat.reminder-countdown/README.md`
+
+Conteudo do README:
+
+- Visao geral do plugin.
+- O que ele faz.
+- Exemplos de exibicao.
+- Como funciona.
+- Usabilidade.
+- Comportamento do clique.
+- Comportamento do hover.
+- Configuracoes `showLabel` e `hideWhenEmpty`.
+- Posicionamento na barra.
+- Instrucoes de instalacao.
+- Exemplos de uso.
+- Limitacoes.
+- Arquivos importantes.
+- Comandos uteis.
+
+Foi validado novamente:
+
+`omarchy plugin validate /home/mat/.config/omarchy/plugins/mat.reminder-countdown`
+
+Resultado: sem erros.
+
+SPEC.md
+=======
+
+Depois do README, foi solicitado criar um `SPEC.md` tecnico para que outro
+desenvolvedor ou outra IA pudesse recriar ou melhorar o plugin.
+
+Arquivo criado:
+
+`/home/mat/.config/omarchy/plugins/mat.reminder-countdown/SPEC.md`
+
+Conteudo do SPEC:
+
+- Purpose.
+- Runtime environment.
+- External contract com `omarchy-reminder show --json`.
+- JSON esperado.
+- Campos obrigatorios por reminder.
+- Manifest.
+- User configuration.
+- QML structure.
+- Internal state.
+- Polling flow.
+- Reminder selection algorithm.
+- Expired reminder detection.
+- Display rules.
+- Click behavior.
+- Blinking behavior.
+- Error handling.
+- Validation.
+- Reimplementation steps.
+- Improvement ideas.
+- Non-goals.
+
+Foi validado novamente:
+
+`omarchy plugin validate /home/mat/.config/omarchy/plugins/mat.reminder-countdown`
+
+Resultado: sem erros.
+
+Arquivos finais do plugin
+=========================
+
+Ao final desta sessao, a pasta do plugin contem:
+
+```text
+/home/mat/.config/omarchy/plugins/mat.reminder-countdown/
+├── BarWidget.qml
+├── BarWidget.qml.bak.multi-timer-alert-1789323309
+├── README.md
+├── SPEC.md
+├── manifest.json
+└── log_session_13092026_1527.txt
+```
+
+Comportamento final do plugin
+=============================
+
+O plugin:
+
+1. Consulta `omarchy-reminder show --json` a cada segundo.
+2. Seleciona o reminder ativo com menor `remainingSeconds`.
+3. Mostra o countdown na barra.
+4. Guarda snapshot dos reminders vistos anteriormente.
+5. Detecta reminders vencidos quando eles desaparecem da lista apos o horario
+   esperado.
+6. Mostra `!` piscando quando ha reminder vencido pendente de reconhecimento.
+7. Continua mostrando o timer seguinte mesmo enquanto o `!` pisca.
+8. Remove o sinalizador visual quando o usuario clica.
+9. Nao cancela nem edita reminders.
+10. Nao modifica arquivos do pacote Omarchy em `/usr/share/omarchy`.
+
+Configuracoes finais conhecidas
+===============================
+
+Entrada no `shell.json`:
+
+```json
+{
+  "id": "mat.reminder-countdown",
+  "showLabel": false,
+  "hideWhenEmpty": true
+}
+```
+
+Significado:
+
+- `showLabel: false`: mostra apenas icone e tempo, sem nome do reminder.
+- `hideWhenEmpty: true`: esconde o widget quando nao ha reminder ativo nem
+  alerta pendente.
+
+Comandos uteis
+==============
+
+Criar reminder:
+
+```bash
+omarchy reminder 5 "Tomar cafe"
+```
+
+Criar dois reminders para testar o fluxo multi-timer:
+
+```bash
+omarchy reminder 1 "Escovar os dentes"
+omarchy reminder 3 "Tomar banho"
+```
+
+Ver reminders ativos:
+
+```bash
+omarchy reminder show
+```
+
+Ver JSON:
+
+```bash
+omarchy reminder show --json
+```
+
+Validar plugin:
+
+```bash
+omarchy plugin validate /home/mat/.config/omarchy/plugins/mat.reminder-countdown
+```
+
+Mover widget para esquerda:
+
+```bash
+omarchy bar move mat.reminder-countdown --section left
+```
+
+Mover widget para direita:
+
+```bash
+omarchy bar move mat.reminder-countdown --section right
+```
+
+Recarregar shell:
+
+```bash
+omarchy restart shell
+```
+
+Notas de seguranca e portabilidade
+==================================
+
+- Nenhum arquivo em `/usr/share/omarchy` foi editado.
+- O plugin vive em `~/.config/omarchy/plugins/`, que e o local de plugins de
+  usuario.
+- A configuracao vive em `~/.config/omarchy/shell.json`.
+- O plugin depende apenas do comando publico `omarchy-reminder show --json`.
+- O estado de alerta pendente e local ao processo do Omarchy Shell. Se o shell
+  reiniciar, esse estado visual pendente e perdido.
+
+Fim do log
+==========

@@ -1,0 +1,383 @@
+# Reminder Countdown - Technical Specification
+
+## Purpose
+
+`mat.reminder-countdown` is an Omarchy Shell `bar-widget` plugin that renders a
+live countdown to the next active `omarchy reminder`.
+
+The plugin is intentionally implemented as a local user plugin under
+`~/.config/omarchy/plugins/` instead of modifying Omarchy packaged files under
+`/usr/share/omarchy/`. This keeps the behavior portable and safe across Omarchy
+updates.
+
+## Runtime Environment
+
+- Desktop shell: Omarchy Shell
+- UI runtime: Quickshell / QML
+- Plugin kind: `bar-widget`
+- Plugin id: `mat.reminder-countdown`
+- Installed path:
+
+```text
+~/.config/omarchy/plugins/mat.reminder-countdown/
+```
+
+Expected files:
+
+```text
+mat.reminder-countdown/
+├── BarWidget.qml
+├── manifest.json
+├── README.md
+└── SPEC.md
+```
+
+## External Contract
+
+The plugin depends on one public command:
+
+```bash
+omarchy-reminder show --json
+```
+
+The command is executed once per second by a QML `Process`.
+
+Expected JSON shape:
+
+```json
+{
+  "count": 1,
+  "active": true,
+  "tooltip": "1 reminder",
+  "reminders": [
+    {
+      "unit": "omarchy-reminder-5m-1789320000",
+      "timer": "omarchy-reminder-5m-1789320000.timer",
+      "minutes": 5,
+      "message": "Tomar cafe",
+      "label": "Tomar cafe",
+      "remaining": "4m 12s",
+      "remainingSeconds": 252,
+      "at": 1789320252,
+      "atTime": "15:44"
+    }
+  ]
+}
+```
+
+Required fields per reminder:
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `remainingSeconds` | number | Used to select and render the next reminder. |
+| `at` | number | Unix timestamp used to detect expired reminders. |
+| `label` | string | Display and tooltip label. |
+| `atTime` | string | Human-readable time for tooltip. |
+| `unit` or `timer` | string | Stable key used to track disappearance. |
+
+If `unit` and `timer` are missing, the plugin falls back to:
+
+```text
+<at>|<label>
+```
+
+## Manifest
+
+`manifest.json` declares the plugin as a bar widget:
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "mat.reminder-countdown",
+  "name": "Reminder Countdown",
+  "version": "1.0.0",
+  "author": "mat",
+  "description": "Shows the next Omarchy reminder countdown in the bar",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  }
+}
+```
+
+Widget defaults:
+
+```json
+{
+  "showLabel": false,
+  "hideWhenEmpty": true
+}
+```
+
+## User Configuration
+
+The widget is enabled and positioned from `~/.config/omarchy/shell.json`.
+
+Example layout entry:
+
+```json
+{
+  "id": "mat.reminder-countdown",
+  "showLabel": false,
+  "hideWhenEmpty": true
+}
+```
+
+Supported settings:
+
+| Setting | Type | Default | Behavior |
+| --- | --- | --- | --- |
+| `showLabel` | boolean | `false` | When true, prefixes the countdown with a shortened reminder label. |
+| `hideWhenEmpty` | boolean | `true` | When true, hides the widget when no countdown or alert is active. |
+
+## QML Structure
+
+`BarWidget.qml` imports:
+
+```qml
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import qs.Commons
+import qs.Ui
+```
+
+Root type:
+
+```qml
+BarWidget {
+  id: root
+  moduleName: "mat.reminder-countdown"
+}
+```
+
+The UI is a single `WidgetButton` filling the root widget. The button inherits
+Omarchy bar styling through the injected `bar` object.
+
+## Internal State
+
+Important runtime properties:
+
+| Property | Type | Purpose |
+| --- | --- | --- |
+| `reminders` | array | Last parsed active reminders. |
+| `nextReminder` | object/null | Reminder with the smallest positive `remainingSeconds`. |
+| `seenReminders` | object | Snapshot of reminders from the previous successful poll. |
+| `remainingSeconds` | number | Current countdown value for `nextReminder`. |
+| `expiredPending` | boolean | Whether an expired reminder is awaiting user acknowledgement. |
+| `expiredLabel` | string | Label shown in tooltip for the expired reminder. |
+| `blinkOn` | boolean | Toggles opacity for the blinking alert. |
+
+Important derived properties:
+
+| Property | Purpose |
+| --- | --- |
+| `hasReminder` | True when `nextReminder` exists. |
+| `countdownText` | Formatted `M:SS` or `H:MM:SS`. |
+| `labelText` | Optional shortened reminder label. |
+| `displayText` | Final text shown in the bar. |
+| `tooltipText` | Tooltip for active or expired state. |
+
+## Polling Flow
+
+The plugin has a one-second repeating `Timer`:
+
+```qml
+Timer {
+  interval: 1000
+  repeat: true
+  running: true
+  triggeredOnStart: true
+  onTriggered: root.refresh()
+}
+```
+
+`refresh()` starts `jsonProc` only when it is not already running:
+
+```qml
+function refresh() {
+  if (!jsonProc.running) jsonProc.running = true
+}
+```
+
+`jsonProc` executes:
+
+```qml
+command: ["omarchy-reminder", "show", "--json"]
+```
+
+On stdout completion, the process calls:
+
+```qml
+root.update(text)
+```
+
+## Reminder Selection Algorithm
+
+`findNext(items)` scans all active reminders and returns the item with the
+lowest positive `remainingSeconds`.
+
+Rules:
+
+- Ignore missing/null items.
+- Ignore reminders with `remainingSeconds <= 0`.
+- Pick the minimum positive remaining time.
+- Return `null` when no active reminders remain.
+
+This guarantees the widget always follows the nearest upcoming reminder.
+
+## Expired Reminder Detection
+
+`omarchy-reminder` removes a reminder from `show --json` after it fires. Because
+the fired reminder is no longer present, the plugin detects expiration by
+comparing snapshots between polls.
+
+Flow:
+
+1. `seenReminders` contains the previous poll's active reminders.
+2. The current poll returns `items`.
+3. `markExpiredFromMissing(items)` checks each previous reminder.
+4. If a previous reminder is no longer present and current time is at or after
+   its expected `at` timestamp, set:
+
+```qml
+expiredPending = true
+expiredLabel = previous.label
+```
+
+5. The plugin then updates `nextReminder` from the current active list.
+6. `seenReminders` is replaced with a snapshot of the current list.
+
+This separation is important: `expiredPending` is independent from
+`nextReminder`, so a fired reminder can blink while the next timer keeps
+counting.
+
+## Display Rules
+
+The visible text is computed by `displayText`.
+
+| State | Example |
+| --- | --- |
+| Active reminder | `󰢌 4:32` |
+| Active reminder with label | `󰢌 Cafe 4:32` |
+| Expired reminder and active next reminder | `󰢌 ! 1:59` |
+| Expired reminder only | `󰢌 !` |
+
+The widget is visible when:
+
+```qml
+expiredPending || hasReminder || !hideWhenEmpty
+```
+
+## Click Behavior
+
+The click handler is intentionally stateful:
+
+1. If `expiredPending` is true:
+   - set `expiredPending = false`;
+   - do not open the reminder list;
+   - do not cancel any active reminder.
+2. Else if `hasReminder` is true:
+   - run `omarchy-reminder show`.
+3. Else:
+   - run `omarchy-reminder -i`.
+
+This makes acknowledgement of an expired reminder a lightweight local UI action.
+
+## Blinking Behavior
+
+Blinking is implemented with a 500 ms repeating `Timer`.
+
+```qml
+Timer {
+  interval: 500
+  repeat: true
+  running: root.expiredPending
+  onTriggered: root.blinkOn = !root.blinkOn
+  onRunningChanged: if (running) root.blinkOn = true
+}
+```
+
+The `WidgetButton` opacity is bound to `blinkOn` while `expiredPending` is true.
+
+## Error Handling
+
+If JSON parsing fails:
+
+- clear `reminders`;
+- clear `nextReminder`;
+- set `remainingSeconds = 0`;
+- keep existing `expiredPending` as-is.
+
+If the process exits with a non-zero code:
+
+- clear `reminders`;
+- clear `nextReminder`;
+- set `remainingSeconds = 0`.
+
+The plugin does not show an error UI. It fails quietly to avoid noisy bar
+behavior.
+
+## Validation
+
+Validate the plugin directory:
+
+```bash
+omarchy plugin validate ~/.config/omarchy/plugins/mat.reminder-countdown
+```
+
+Reload plugin discovery if the shell is running:
+
+```bash
+omarchy-shell shell rescanPlugins
+```
+
+Restart the shell if needed:
+
+```bash
+omarchy restart shell
+```
+
+## Reimplementation Steps
+
+To recreate the plugin from scratch:
+
+1. Create `~/.config/omarchy/plugins/mat.reminder-countdown/`.
+2. Add `manifest.json` with id `mat.reminder-countdown`, kind `bar-widget`, and
+   entry point `BarWidget.qml`.
+3. Implement `BarWidget.qml` with `BarWidget` as root and `moduleName` set to
+   `mat.reminder-countdown`.
+4. Add a one-second polling timer.
+5. Use `Process` to run `omarchy-reminder show --json`.
+6. Parse the returned JSON and select the reminder with the smallest positive
+   `remainingSeconds`.
+7. Keep a snapshot of reminders from the previous poll.
+8. Mark `expiredPending` when a previously seen reminder disappears after its
+   `at` timestamp.
+9. Render countdown and pending alert as independent states.
+10. Add click behavior for acknowledgement, show, and interactive creation.
+11. Validate with `omarchy plugin validate`.
+12. Add the widget to `~/.config/omarchy/shell.json` or enable it with
+   `omarchy plugin enable mat.reminder-countdown`.
+
+## Improvement Ideas
+
+Safe future improvements:
+
+- Persist `expiredPending` to a small runtime file so acknowledgement survives
+  shell restarts.
+- Show a count of unacknowledged expired reminders instead of a single `!`.
+- Add a right-click action to show all active reminders even while an alert is
+  pending.
+- Add optional settings for poll interval, blink speed, or display format.
+- Render the alert as a separate small icon while keeping the countdown text
+  visually stable.
+- Add a lightweight QML test harness with mocked JSON payloads.
+
+## Non-goals
+
+- Do not edit `/usr/share/omarchy/`.
+- Do not replace `omarchy-reminder`.
+- Do not manage systemd timers directly.
+- Do not cancel or modify reminders from this widget.
+- Do not persist user configuration outside `shell.json`.

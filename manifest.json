@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "mat.reminder-countdown",
+  "name": "Reminder Countdown",
+  "version": "1.0.0",
+  "author": "mat",
+  "description": "Shows the next Omarchy reminder countdown in the bar",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Reminder Countdown",
+    "description": "Countdown to the next reminder with an acknowledgement alert",
+    "category": "Time",
+    "allowMultiple": false,
+    "defaultSection": "center",
+    "defaults": {
+      "showLabel": false,
+      "hideWhenEmpty": true
+    },
+    "schema": [
+      {
+        "key": "showLabel",
+        "type": "boolean",
+        "label": "Show reminder label"
+      },
+      {
+        "key": "hideWhenEmpty",
+        "type": "boolean",
+        "label": "Hide when no reminder"
+      }
+    ]
+  }
+}
