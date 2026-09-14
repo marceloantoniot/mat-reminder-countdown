@@ -122,7 +122,7 @@ Exemplo:
 
 ```json
 {
-  "id": "mat.reminder-countdown",
+  "id": "mat-reminder-countdown",
   "showLabel": false,
   "hideWhenEmpty": true
 }
@@ -170,13 +170,13 @@ O widget pode ficar em `left`, `center` ou `right`.
 Use o comando do Omarchy:
 
 ```bash
-omarchy bar move mat.reminder-countdown --section left
+omarchy bar move mat-reminder-countdown --section left
 ```
 
 ou:
 
 ```bash
-omarchy bar move mat.reminder-countdown --section right
+omarchy bar move mat-reminder-countdown --section right
 ```
 
 Tambem e possivel mover manualmente o bloco no `shell.json` para uma das
@@ -195,13 +195,13 @@ listas:
 Este plugin deve ficar em:
 
 ```text
-~/.config/omarchy/plugins/mat.reminder-countdown/
+~/.config/omarchy/plugins/mat-reminder-countdown/
 ```
 
 A estrutura esperada e:
 
 ```text
-mat.reminder-countdown/
+mat-reminder-countdown/
 ├── BarWidget.qml
 ├── manifest.json
 └── README.md
@@ -210,13 +210,13 @@ mat.reminder-countdown/
 Depois de copiar a pasta, valide o plugin:
 
 ```bash
-omarchy plugin validate ~/.config/omarchy/plugins/mat.reminder-countdown
+omarchy plugin validate ~/.config/omarchy/plugins/mat-reminder-countdown
 ```
 
 Habilite o plugin:
 
 ```bash
-omarchy plugin enable mat.reminder-countdown
+omarchy plugin enable mat-reminder-countdown
 ```
 
 Se ele nao aparecer imediatamente, recarregue o shell:
@@ -289,5 +289,5 @@ omarchy reminder clear
 Validar o plugin
 
 ```bash
-omarchy plugin validate ~/.config/omarchy/plugins/mat.reminder-countdown
+omarchy plugin validate ~/.config/omarchy/plugins/mat-reminder-countdown
 ```

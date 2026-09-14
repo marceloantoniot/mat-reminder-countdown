@@ -6,7 +6,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "mat.reminder-countdown"
+  moduleName: "mat-reminder-countdown"
 
   property var reminders: []
   property var nextReminder: null

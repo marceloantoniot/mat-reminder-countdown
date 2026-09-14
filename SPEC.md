@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`mat.reminder-countdown` is an Omarchy Shell `bar-widget` plugin that renders a
+`mat-reminder-countdown` is an Omarchy Shell `bar-widget` plugin that renders a
 live countdown to the next active `omarchy reminder`.
 
 The plugin is intentionally implemented as a local user plugin under
@@ -15,17 +15,17 @@ updates.
 - Desktop shell: Omarchy Shell
 - UI runtime: Quickshell / QML
 - Plugin kind: `bar-widget`
-- Plugin id: `mat.reminder-countdown`
+- Plugin id: `mat-reminder-countdown`
 - Installed path:
 
 ```text
-~/.config/omarchy/plugins/mat.reminder-countdown/
+~/.config/omarchy/plugins/mat-reminder-countdown/
 ```
 
 Expected files:
 
 ```text
-mat.reminder-countdown/
+mat-reminder-countdown/
 ├── BarWidget.qml
 ├── manifest.json
 ├── README.md
@@ -94,7 +94,7 @@ If `unit` and `timer` are missing, the plugin falls back to:
 ```json
 {
   "schemaVersion": 1,
-  "id": "mat.reminder-countdown",
+  "id": "mat-reminder-countdown",
   "name": "Reminder Countdown",
   "version": "1.0.0",
   "author": "mat",
@@ -123,7 +123,7 @@ Example layout entry:
 
 ```json
 {
-  "id": "mat.reminder-countdown",
+  "id": "mat-reminder-countdown",
   "showLabel": false,
   "hideWhenEmpty": true
 }
@@ -153,7 +153,7 @@ Root type:
 ```qml
 BarWidget {
   id: root
-  moduleName: "mat.reminder-countdown"
+  moduleName: "mat-reminder-countdown"
 }
 ```
 
@@ -363,7 +363,7 @@ behavior.
 Validate the plugin directory:
 
 ```bash
-omarchy plugin validate ~/.config/omarchy/plugins/mat.reminder-countdown
+omarchy plugin validate ~/.config/omarchy/plugins/mat-reminder-countdown
 ```
 
 Reload plugin discovery if the shell is running:
@@ -382,11 +382,11 @@ omarchy restart shell
 
 To recreate the plugin from scratch:
 
-1. Create `~/.config/omarchy/plugins/mat.reminder-countdown/`.
-2. Add `manifest.json` with id `mat.reminder-countdown`, kind `bar-widget`, and
+1. Create `~/.config/omarchy/plugins/mat-reminder-countdown/`.
+2. Add `manifest.json` with id `mat-reminder-countdown`, kind `bar-widget`, and
    entry point `BarWidget.qml`.
 3. Implement `BarWidget.qml` with `BarWidget` as root and `moduleName` set to
-   `mat.reminder-countdown`.
+   `mat-reminder-countdown`.
 4. Add a one-second polling timer.
 5. Use `Process` to run `omarchy-reminder show --json`.
 6. Parse the returned JSON and select the reminder with the smallest positive
@@ -400,7 +400,7 @@ To recreate the plugin from scratch:
 11. Add click behavior for acknowledgement, show, and interactive creation.
 12. Validate with `omarchy plugin validate`.
 13. Add the widget to `~/.config/omarchy/shell.json` or enable it with
-   `omarchy plugin enable mat.reminder-countdown`.
+   `omarchy plugin enable mat-reminder-countdown`.
 
 ## Improvement Ideas
 
